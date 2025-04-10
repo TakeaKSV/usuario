@@ -9,24 +9,39 @@ const errorResponse = (res, status, message) => {
 };
 
 // Middleware para verificar el token
-const verifyToken = (req, res, next) => {
-  const token = req.headers['authorization'];
-  if (!token) {
-    return errorResponse(res, 401, "Token no proporcionado");
+export const verifyToken = (req, res, next) => {
+  const authHeader = req.headers['authorization'];
+
+  // Log the Authorization header for debugging
+  console.log("Authorization header:", authHeader);
+
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return errorResponse(res, 401, "Token no proporcionado o malformado");
   }
+
+  const token = authHeader.split(' ')[1]; // Extract the token after "Bearer"
 
   try {
     const SECRET_KEY = "c9PcgRFL2S8n0NYQp6MZUbbxRgTRHJxjYnvux54VrnA=";
     const decoded = jwt.verify(token, SECRET_KEY);
-    req.user = decoded;
+
+    // Log the decoded token for debugging
+    console.log("Decoded token:", decoded);
+
+    req.user = decoded.user; // Assign the user object from the token to req.user
     next();
   } catch (error) {
+    console.error("Error al verificar el token:", error.message);
     return errorResponse(res, 401, "Token inválido");
   }
 };
 
 export const getUsers = async (req, res) => {
   try {
+    if (req.user.role !== "admin") {
+      return errorResponse(res, 403, "Acceso denegado: solo los administradores pueden realizar esta operación");
+    }
+
     const users = await User.findAll();
     res.status(200).json(users);
   } catch (error) {
@@ -168,32 +183,68 @@ export const deleteUser = async (req, res) => {
 
 export const login = async (req, res) => {
   try {
-      const SECRET_KEY = "c9PcgRFL2S8n0NYQp6MZUbbxRgTRHJxjYnvux54VrnA=";
+    const SECRET_KEY = "c9PcgRFL2S8n0NYQp6MZUbbxRgTRHJxjYnvux54VrnA=";
 
-      const { username, password } = req.body;
+    const { username, password } = req.body;
 
-      const user = await User.findOne({ where: { username } });
+    const user = await User.findOne({ where: { username } });
 
-      if (!user) {
-          return errorResponse(res, 401, "Credenciales inválidas");
-      }
+    if (!user) {
+      return errorResponse(res, 401, "Credenciales inválidas");
+    }
 
-      if (user.password !== password) {
-          return errorResponse(res, 401, "Credenciales inválidas");
-      }
+    if (user.password !== password) {
+      return errorResponse(res, 401, "Credenciales inválidas");
+    }
 
-      // Asegúrate de que estás generando el token correctamente
-      const token = jwt.sign(
-          { id: user.id, username: user.username },
-          SECRET_KEY,
-          { expiresIn: '1h' }
-      );
+    // Include the role in the token payloadpayload
+    const token = jwt.sign(
+      { id: user.id, username: user.username, role: user.role },
+      SECRET_KEY,
+      { expiresIn: '1h' }
+    );
 
-      return res.status(200).json({ message: 'Inicio de sesión exitoso', token });
+    return res.status(200).json({ message: 'Inicio de sesión exitoso', token });
 
   } catch (error) {
-      console.error('Error en el login: ', error);
-      errorResponse(res, 500, 'Error en el servidor');
-    }
+    console.error('Error en el login: ', error);
+    errorResponse(res, 500, 'Error en el servidor');
+  }
+};
 
+export const promoteToAdmin = async (req, res) => {
+  const { username } = req.body;
+
+  if (!username) {
+    return errorResponse(res, 400, "El correo del usuario es requerido");
+  }
+
+  try {
+    // Ensure req.user is populated by verifyToken middleware
+    if (!req.user) {
+      console.error("Error: req.user is undefined. Ensure verifyToken middleware is applied.");
+      return errorResponse(res, 401, "No se pudo verificar el usuario autenticado");
+    }
+
+    if (req.user.role !== "admin") {
+      return errorResponse(res, 403, "Acceso denegado: solo los administradores pueden realizar esta operación");
+    }
+
+    const user = await User.findOne({ where: { username } });
+
+    if (!user) {
+      return errorResponse(res, 404, "Usuario no encontrado");
+    }
+
+    if (user.role === "admin") {
+      return errorResponse(res, 400, "El usuario ya tiene el rol de administrador");
+    }
+
+    await user.update({ role: "admin" });
+
+    return res.status(200).json({ message: "El usuario ha sido promovido a administrador", data: user });
+  } catch (error) {
+    console.error("Error al promover usuario a administrador:", error);
+    errorResponse(res, 500, "Error al promover usuario a administrador");
+  }
 };

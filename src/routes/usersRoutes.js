@@ -1,6 +1,7 @@
 import express from 'express';
-import { getUsers, createUser, updateUser, deleteUser, login } from '../controllers/userController.js';
+import { getUsers, createUser, updateUser, deleteUser, login, promoteToAdmin, verifyToken } from '../controllers/userController.js';
 
+import { validateToken } from '../middlewares/authMiddleware.js';
 const router = express.Router(); // Router para crear rutas de nuestro servicio
 
 /**
@@ -16,7 +17,7 @@ const router = express.Router(); // Router para crear rutas de nuestro servicio
  *      '200':
  *        description: A successful response
  */
-router.get('/all', getUsers);
+router.get('/all', validateToken, getUsers);
 /**
  * @swagger
  * /app/users/create:
@@ -128,5 +129,7 @@ router.patch('/delete/:id', deleteUser);
 // router.post('/recuperar', recoverPassword);
 
 router.post('/login', login);
+router.post("/promote", validateToken, promoteToAdmin);
+
 
 export default router;

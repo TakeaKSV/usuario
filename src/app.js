@@ -7,7 +7,6 @@ import swaggerUI from "swagger-ui-express"
 import dotenv from 'dotenv';
 import { startClienteConsumer } from "./services/clienteConsumerService.js";
 import { connectWithRetry } from "./config/bd.js";
-import setupAssociations from "./models/associations.js";
 
 dotenv.config();
 
@@ -20,8 +19,7 @@ app.use('/api-docs', swaggerUI.serve, swaggerUI.setup(swaggerSpec));
 // Inicializar base de datos y asociaciones
 connectWithRetry().then(success => {
   if (success) {
-    setupAssociations();
-    
+      
     // Iniciar consumidor de eventos de cliente
     startClienteConsumer().catch(err => {
       console.error("Error iniciando consumidor de clientes:", err);
