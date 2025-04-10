@@ -50,136 +50,145 @@ export const getUsers = async (req, res) => {
   }
 };
 
-export const createUser = async (req, res) => {
-  const { username, password, phone } = req.body;
+export const createUser = [
+  verifyToken, // Add verifyToken middleware
+  async (req, res) => {
+    const { username, password, phone } = req.body;
 
-  // Validar campos requeridos
-  if (!username || !password || !phone) {
-    return errorResponse(res, 400, "Todos los campos son requeridos");
-  }
-
-  // Validar formato de correo electrónico
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  if (!emailRegex.test(username)) {
-    return errorResponse(res, 400, "El formato del correo electrónico no es válido");
-  }
-
-  // Validar formato de teléfono (10 dígitos)
-  const phoneRegex = /^\d{10}$/;
-  if (!phoneRegex.test(phone)) {
-    return errorResponse(res, 400, "El teléfono debe contener exactamente 10 dígitos numéricos");
-  }
-
-  // Validar longitud de contraseña
-  if (password.length < 8) {
-    return errorResponse(res, 400, "La contraseña debe tener 8 o más caracteres");
-  }
-
-  try {
-    // Verificar si el usuario ya existe
-    const existingUser = await User.findOne({
-      where: {
-        [Op.or]: [{ username }, { phone }],
-      },
-    });
-
-    if (existingUser) {
-      return errorResponse(res, 400, existingUser.username === username 
-        ? "El correo ya está en uso" 
-        : "El teléfono ya está en uso");
+    // Validar campos requeridos
+    if (!username || !password || !phone) {
+      return errorResponse(res, 400, "Todos los campos son requeridos");
     }
 
-    // Crear el usuario
-    const newUser = await User.create({
-      phone,
-      username,
-      password, // Idealmente deberías hashear la contraseña
-      status: true,
-      creationDate: new Date(),
-    });
+    // Validar formato de correo electrónico
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(username)) {
+      return errorResponse(res, 400, "El formato del correo electrónico no es válido");
+    }
 
-    // Publicar evento
-    await userCreatedEvent({
-      id: newUser.id,
-      username: newUser.username,
-      phone: newUser.phone,
-      creationDate: newUser.creationDate,
-    });
+    // Validar formato de teléfono (10 dígitos)
+    const phoneRegex = /^\d{10}$/;
+    if (!phoneRegex.test(phone)) {
+      return errorResponse(res, 400, "El teléfono debe contener exactamente 10 dígitos numéricos");
+    }
 
-    return res.status(201).json({ 
-      message: "Usuario creado correctamente", 
-      data: {
+    // Validar longitud de contraseña
+    if (password.length < 8) {
+      return errorResponse(res, 400, "La contraseña debe tener 8 o más caracteres");
+    }
+
+    try {
+      // Verificar si el usuario ya existe
+      const existingUser = await User.findOne({
+        where: {
+          [Op.or]: [{ username }, { phone }],
+        },
+      });
+
+      if (existingUser) {
+        return errorResponse(res, 400, existingUser.username === username 
+          ? "El correo ya está en uso" 
+          : "El teléfono ya está en uso");
+      }
+
+      // Crear el usuario
+      const newUser = await User.create({
+        phone,
+        username,
+        password, // Idealmente deberías hashear la contraseña
+        status: true,
+        creationDate: new Date(),
+      });
+
+      // Publicar evento
+      await userCreatedEvent({
         id: newUser.id,
         username: newUser.username,
         phone: newUser.phone,
-        status: newUser.status,
-        creationDate: newUser.creationDate
-      }
-    });
-  } catch (error) {
-    console.error("Error al crear usuario:", error);
-    errorResponse(res, 500, "Error al crear usuario");
+        creationDate: newUser.creationDate,
+      });
+
+      return res.status(201).json({ 
+        message: "Usuario creado correctamente", 
+        data: {
+          id: newUser.id,
+          username: newUser.username,
+          phone: newUser.phone,
+          status: newUser.status,
+          creationDate: newUser.creationDate
+        }
+      });
+    } catch (error) {
+      console.error("Error al crear usuario:", error);
+      errorResponse(res, 500, "Error al crear usuario");
+    }
   }
-};
+];
 
-export const updateUser = async (req, res) => {
-  const { id } = req.params;
-  const { password, phone } = req.body;
+export const updateUser = [
+  verifyToken, // Add verifyToken middleware
+  async (req, res) => {
+    const { id } = req.params;
+    const { password, phone } = req.body;
 
-  try {
-    const user = await User.findByPk(id);
-    if (!user) {
-      return errorResponse(res, 404, "Usuario no encontrado");
-    }
-
-    if (phone) {
-      const phoneExists = await User.findOne({ where: { phone, id: { [Op.ne]: id } } });
-      if (phoneExists) {
-        return errorResponse(res, 400, "El teléfono ya está en uso");
+    try {
+      const user = await User.findByPk(id);
+      if (!user) {
+        return errorResponse(res, 404, "Usuario no encontrado");
       }
-      if (!/^\d{10}$/.test(phone)) {
-        return errorResponse(res, 400, "El teléfono debe contener exactamente 10 dígitos numéricos");
+
+      if (phone) {
+        const phoneExists = await User.findOne({ where: { phone, id: { [Op.ne]: id } } });
+        if (phoneExists) {
+          return errorResponse(res, 400, "El teléfono ya está en uso");
+        }
+        if (!/^\d{10}$/.test(phone)) {
+          return errorResponse(res, 400, "El teléfono debe contener exactamente 10 dígitos numéricos");
+        }
       }
+
+      const usernameExists = await User.findOne({ where: { username: user.username, id: { [Op.ne]: id } } });
+      if (usernameExists) {
+        return errorResponse(res, 400, "El correo ya está en uso");
+      }
+
+      if (password && password.length < 8) {
+        return errorResponse(res, 400, "La contraseña debe tener al menos 8 caracteres");
+      }
+
+      await user.update({
+        password: password ?? user.password,
+        phone: phone ?? user.phone,
+      });
+
+      return res.status(200).json({ message: "Usuario actualizado correctamente", data: user });
+    } catch (error) {
+      console.error("Error al actualizar usuario:", error);
+      errorResponse(res, 500, "Error al actualizar usuario");
     }
-
-    const usernameExists = await User.findOne({ where: { username: user.username, id: { [Op.ne]: id } } });
-    if (usernameExists) {
-      return errorResponse(res, 400, "El correo ya está en uso");
-    }
-
-    if (password && password.length < 8) {
-      return errorResponse(res, 400, "La contraseña debe tener al menos 8 caracteres");
-    }
-
-    await user.update({
-      password: password ?? user.password,
-      phone: phone ?? user.phone,
-    });
-
-    return res.status(200).json({ message: "Usuario actualizado correctamente", data: user });
-  } catch (error) {
-    console.error("Error al actualizar usuario:", error);
-    errorResponse(res, 500, "Error al actualizar usuario");
   }
-};
+];
 
-export const deleteUser = async (req, res) => {
-  const { id } = req.params;
+export const deleteUser = [
+  verifyToken, // Add verifyToken middleware
+  async (req, res) => {
+    const { id } = req.params;
 
-  try {
-    const user = await User.findByPk(id);
-    if (!user) {
-      return errorResponse(res, 404, "Usuario no encontrado");
+    try {
+      const user = await User.findByPk(id);
+      if (!user) {
+        return errorResponse(res, 404, "Usuario no encontrado");
+      }
+
+      await user.update({ status: false });
+
+      return res.status(200).json({ message: "Usuario eliminado correctamente" });
+    } catch (error) {
+      console.error("Error al eliminar usuario:", error);
+      errorResponse(res, 500, "Error al eliminar usuario");
     }
-
-    await user.update({ status: false });
-
-    return res.status(200).json({ message: "Usuario eliminado correctamente" });
-  } catch (error) {
-    console.error("Error al eliminar usuario:", error);
-    errorResponse(res, 500, "Error al eliminar usuario");
   }
-}
+];
 
 export const login = async (req, res) => {
   try {

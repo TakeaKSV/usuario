@@ -47,7 +47,7 @@ router.get('/all', validateToken, getUsers);
  *       400:
  *         description: Bad request
  */
-router.post('/create', createUser);
+router.post('/create', validateToken, createUser);
 /**
  * @swagger
  * /app/users/update/{id}:
@@ -82,7 +82,7 @@ router.post('/create', createUser);
  *       404:
  *         description: User not found
  */
-router.patch('/update/:id', updateUser);
+router.patch('/update/:id', validateToken, updateUser);
 /**
  * @swagger
  * /app/users/delete/{id}:
@@ -100,7 +100,7 @@ router.patch('/update/:id', updateUser);
  *       '200':
  *         description: User deleted successfully
  */
-router.patch('/delete/:id', deleteUser);
+router.patch('/delete/:id', validateToken, deleteUser);
 
 /**
  * @swagger
